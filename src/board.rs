@@ -5,10 +5,21 @@ pub enum Direction {
     Y,
 }
 
+pub enum Cell {
+    Val(u8),
+    Hint(HashSet<u8>),
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Cell::Hint(HashSet::from_iter(1..10))
+    }
+}
+
 pub struct Board {
     // Row major representation of all the board's values
     // (A list of rows, row first then column, dum dum)
-    cells: [[u8; 9]; 9],
+    cells: [[Cell; 9]; 9],
     solve_steps: Vec<SolveStep>,
 }
 
@@ -18,7 +29,16 @@ struct SolveStep {
 }
 
 impl Board {
-    pub fn from_cells(cells: [[u8; 9]; 9]) -> Self {
+    pub fn from_vals(vals: [[u8; 9]; 9]) -> Self {
+        let mut cells: [[Cell; 9]; 9] = Default::default();
+        for row in 0..9 {
+            for col in 0..9 {
+                let val = vals[row][col];
+                if val != 0 {
+                    cells[row][col] = Cell::Val(val);
+                }
+            }
+        }
         Board {
             cells,
             solve_steps: Vec::new(),
@@ -27,38 +47,44 @@ impl Board {
 
     // This may only be used to verify if the box is valid.
     // If so, this should probably be refactored to just to that here.
-    fn get_box(&self, col: usize, row: usize) -> [u8; 9] {
-        let cells = self.get_solved_cells();
+    fn get_box(&self, row: usize, col: usize) -> Vec<&Cell> {
         // Get the top left cell of the box
         let top = (row as f32 / 3f32).floor() as usize * 3;
         let left = (col as f32 / 3f32).floor() as usize * 3;
-        let mut vals = [0; 9];
+        let mut cells = Vec::new();
         for i in 0..3 {
             for j in 0..3 {
-                vals[i * 3 + j] = cells[j + top][i + left];
+                cells.push(&self.cells[j + top][i + left]);
             }
         }
-        vals
+        cells
     }
 
-    fn get_line(&self, pos: usize, dir: Direction) -> [u8; 9] {
-        let cells = self.get_solved_cells();
-        let mut vals = [0; 9];
+    fn get_line(&self, pos: usize, dir: Direction) -> Vec<&Cell> {
+        let mut cells = Vec::new();
         for i in 0..9 {
-            vals[i] = cells[if let Direction::X = dir { pos } else { i }]
-                [if let Direction::Y = dir { pos } else { i }];
+            cells.push(
+                &self.cells[if let Direction::X = dir { pos } else { i }]
+                    [if let Direction::Y = dir { pos } else { i }],
+            );
         }
-        vals
+        cells
     }
 
     pub fn check_valid(&self) -> bool {
-        fn check_vals(vals: [u8; 9]) -> bool {
+        fn check_unique_cells(cells: Vec<&Cell>) -> bool {
             let mut unique = HashSet::new();
-            for val in vals {
-                if val != 0 && unique.contains(&val) {
-                    return false;
+            for cell in cells {
+                match cell {
+                    Cell::Val(val) => {
+                        if unique.contains(&val) {
+                            return false;
+                        } else {
+                            unique.insert(val);
+                        }
+                    }
+                    _ => {}
                 }
-                unique.insert(val);
             }
             true
         }
@@ -66,89 +92,95 @@ impl Board {
         for i in 0..3 {
             for j in 0..3 {
                 let vals = self.get_box(i * 3, j * 3);
-                if !check_vals(vals) {
+                if !check_unique_cells(vals) {
                     return false;
                 }
             }
         }
         for i in 0..9 {
             // Check all the rows
-            if !check_vals(self.get_line(i, Direction::X)) {
+            if !check_unique_cells(self.get_line(i, Direction::X)) {
                 return false;
             }
             // Check all the columns
-            if !check_vals(self.get_line(i, Direction::Y)) {
+            if !check_unique_cells(self.get_line(i, Direction::Y)) {
                 return false;
             }
         }
         true
     }
 
-    fn find_naked_single(&self) -> Option<SolveStep> {
-        let cells = self.get_solved_cells();
+    fn trim_hints(&mut self) {
         for row in 0..9 {
-            'nums: for col in 0..9 {
-                if cells[row][col] != 0 {
-                    continue;
-                }
-                let box_vals = self.get_box(col, row);
+            for col in 0..9 {
+                let box_vals = self.get_box(row, col);
                 let row_vals = self.get_line(row, Direction::X);
                 let col_vals = self.get_line(col, Direction::Y);
-                let mut valid_num = 0;
-                for num in 1..10 {
-                    if !box_vals.contains(&num)
-                        && !row_vals.contains(&num)
-                        && !col_vals.contains(&num)
-                    {
-                        if valid_num != 0 {
-                            continue 'nums;
-                        }
-                        valid_num = num;
+                let adjacent_vals = HashSet::<_>::from_iter(
+                    box_vals
+                        .iter()
+                        .chain(row_vals.iter())
+                        .chain(col_vals.iter())
+                        .filter_map(|cell| match cell {
+                            Cell::Val(num) => Some(*num),
+                            _ => None,
+                        }),
+                );
+                if let Cell::Hint(hints) = &mut self.cells[row][col] {
+                    for num in adjacent_vals {
+                        hints.remove(&num);
                     }
-                }
-                if valid_num != 0 {
-                    return Some(SolveStep {
-                        pos: [row, col],
-                        val: valid_num,
-                    });
                 }
             }
         }
-        return None;
+    }
+
+    fn find_naked_single(&self) -> Option<SolveStep> {
+        for row in 0..9 {
+            for col in 0..9 {
+                match &self.cells[row][col] {
+                    Cell::Hint(hints) => {
+                        if let Some(val) = hints.iter().next() {
+                            if hints.len() == 1 {
+                                return Some(SolveStep {
+                                    pos: [row, col],
+                                    val: *val,
+                                });
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+
+    fn apply_step(&mut self, step: SolveStep) {
+        self.cells[step.pos[0]][step.pos[1]] = Cell::Val(step.val);
+        self.solve_steps.push(step);
     }
 
     pub fn solve(&mut self) {
         loop {
+            self.trim_hints();
             let step = self.find_naked_single();
             if let Some(step) = step {
-                self.solve_steps.push(step);
+                self.apply_step(step);
                 continue;
             }
             break;
         }
     }
 
-    pub fn get_solved_cells(&self) -> [[u8; 9]; 9] {
-        let mut cells = self.cells;
-        for step in &self.solve_steps {
-            cells[step.pos[0]][step.pos[1]] = step.val;
-        }
-        return cells;
-    }
-
-    pub fn display(&self, solved: bool) {
-        let cells = if solved {
-            self.get_solved_cells()
-        } else {
-            self.cells
-        };
+    pub fn display(&self) {
         for row in 0..9 {
             for col in 0..9 {
-                let val = cells[row][col];
-                if val == 0 {
-                    print!(" ");
-                } else {
-                    print!("{}", val);
+                match self.cells[row][col] {
+                    Cell::Val(val) => {
+                        print!("{}", val)
+                    }
+                    Cell::Hint(_) => print!(" "),
                 }
                 if col % 3 == 2 && col != 8 {
                     print!("|");
