@@ -71,40 +71,18 @@ impl Board {
         cells
     }
 
-    pub fn check_valid(&self) -> bool {
-        fn check_unique_cells(cells: Vec<&Cell>) -> bool {
-            let mut unique = HashSet::new();
-            for cell in cells {
-                match cell {
-                    Cell::Val(val) => {
-                        if unique.contains(&val) {
+    pub fn check_valid(&mut self) -> bool {
+        self.trim_hints();
+        for row in &self.cells {
+            for val in row {
+                match val {
+                    Cell::Hint(hints) => {
+                        if hints.is_empty() {
                             return false;
-                        } else {
-                            unique.insert(val);
                         }
                     }
                     _ => {}
                 }
-            }
-            true
-        }
-        // Check all the boxes
-        for i in 0..3 {
-            for j in 0..3 {
-                let vals = self.get_box(i * 3, j * 3);
-                if !check_unique_cells(vals) {
-                    return false;
-                }
-            }
-        }
-        for i in 0..9 {
-            // Check all the rows
-            if !check_unique_cells(self.get_line(i, Direction::X)) {
-                return false;
-            }
-            // Check all the columns
-            if !check_unique_cells(self.get_line(i, Direction::Y)) {
-                return false;
             }
         }
         true
