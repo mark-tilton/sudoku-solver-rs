@@ -94,10 +94,6 @@ impl Board {
                 let box_vals = self.get_box(col, row);
                 let row_vals = self.get_line(row, Direction::X);
                 let col_vals = self.get_line(col, Direction::Y);
-                // println!("Box vals: {:?}", box_vals);
-                // println!("Row vals: {:?}", row_vals);
-                // println!("Col vals: {:?}", col_vals);
-                // return None;
                 let mut valid_num = 0;
                 for num in 1..10 {
                     if !box_vals.contains(&num)
@@ -125,9 +121,6 @@ impl Board {
         loop {
             let step = self.find_naked_single();
             if let Some(step) = step {
-                // println!("Found {} at ({}, {})", step.val, step.pos[0], step.pos[1]);
-                // println!("Valid: {}", self.check_valid());
-                // self.display(true);
                 self.solve_steps.push(step);
                 continue;
             }
