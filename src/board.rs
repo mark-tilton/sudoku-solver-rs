@@ -28,10 +28,6 @@ struct SolveStep {
     val: u8,
 }
 
-fn foo(x: i32) -> i32 {
-    return x;
-}
-
 impl Board {
     pub fn from_vals(vals: [[u8; 9]; 9]) -> Self {
         let mut cells: [[Cell; 9]; 9] = Default::default();
