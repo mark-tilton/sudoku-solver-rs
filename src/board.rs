@@ -74,6 +74,18 @@ impl Board {
         cells
     }
 
+    pub fn check_solved(&self) -> bool {
+        for row in &self.cells {
+            for cell in row {
+                match cell {
+                    Cell::Hint(_) => return false,
+                    _ => {}
+                }
+            }
+        }
+        true
+    }
+
     pub fn check_valid(&mut self) -> bool {
         self.trim_hints();
         // Check that there are no cells with no valid numbers
