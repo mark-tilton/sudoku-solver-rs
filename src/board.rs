@@ -28,6 +28,10 @@ struct SolveStep {
     val: u8,
 }
 
+fn foo(x: i32) -> i32 {
+    return x;
+}
+
 impl Board {
     pub fn from_vals(vals: [[u8; 9]; 9]) -> Self {
         let mut cells: [[Cell; 9]; 9] = Default::default();
@@ -45,26 +49,27 @@ impl Board {
         }
     }
 
-    fn get_box(&self, row: usize, col: usize) -> Vec<&Cell> {
+    fn get_box(&self, row: usize, col: usize) -> Vec<(&Cell, [usize; 2])> {
         // Get the top left cell of the box
         let top = (row as f32 / 3f32).floor() as usize * 3;
         let left = (col as f32 / 3f32).floor() as usize * 3;
         let mut cells = Vec::new();
         for i in 0..3 {
             for j in 0..3 {
-                cells.push(&self.cells[j + top][i + left]);
+                let row = j + top;
+                let col = i + left;
+                cells.push((&self.cells[row][col], [row, col]));
             }
         }
         cells
     }
 
-    fn get_line(&self, pos: usize, dir: Direction) -> Vec<&Cell> {
+    fn get_line(&self, pos: usize, dir: Direction) -> Vec<(&Cell, [usize; 2])> {
         let mut cells = Vec::new();
         for i in 0..9 {
-            cells.push(
-                &self.cells[if let Direction::X = dir { pos } else { i }]
-                    [if let Direction::Y = dir { pos } else { i }],
-            );
+            let row = if let Direction::X = dir { pos } else { i };
+            let col = if let Direction::Y = dir { pos } else { i };
+            cells.push((&self.cells[row][col], [row, col]));
         }
         cells
     }
@@ -96,7 +101,7 @@ impl Board {
                 let mut possible_vals = [false; 9];
                 // Check that each row / col / box contains no duplicate numbers
                 let mut found_vals = [false; 9];
-                for cell in cells {
+                for (cell, _) in cells {
                     match cell {
                         Cell::Val(num) => {
                             possible_vals[*num as usize - 1] = true;
@@ -131,7 +136,7 @@ impl Board {
                         .iter()
                         .chain(row_vals.iter())
                         .chain(col_vals.iter())
-                        .filter_map(|cell| match cell {
+                        .filter_map(|(cell, _)| match cell {
                             Cell::Val(num) => Some(*num),
                             _ => None,
                         }),
@@ -145,6 +150,7 @@ impl Board {
         }
     }
 
+    // Strategy
     fn find_naked_single(&self) -> Option<SolveStep> {
         for row in 0..9 {
             for col in 0..9 {
@@ -166,18 +172,58 @@ impl Board {
         None
     }
 
+    fn find_lonely_single(&self) -> Option<SolveStep> {
+        for i in 0..9 {
+            for cells in [
+                self.get_box(i, i % 3 * 3),
+                self.get_line(i, Direction::X),
+                self.get_line(i, Direction::Y),
+            ] {
+                'nums: for num in 1..10 {
+                    let mut found = false;
+                    let mut found_pos = [0; 2];
+                    for (cell, pos) in &cells {
+                        match cell {
+                            Cell::Hint(hints) => {
+                                if hints.contains(&num) {
+                                    // If already found, try the next number
+                                    if found {
+                                        continue 'nums;
+                                    }
+                                    found = true;
+                                    found_pos = *pos;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if found {
+                        return Some(SolveStep {
+                            val: num,
+                            pos: found_pos,
+                        });
+                    }
+                }
+            }
+        }
+        None
+    }
+
     fn apply_step(&mut self, step: SolveStep) {
         self.cells[step.pos[0]][step.pos[1]] = Cell::Val(step.val);
         self.solve_steps.push(step);
     }
 
     pub fn solve(&mut self) {
-        loop {
+        let strategies = [Board::find_naked_single, Board::find_lonely_single];
+        'outer: loop {
             self.trim_hints();
-            let step = self.find_naked_single();
-            if let Some(step) = step {
-                self.apply_step(step);
-                continue;
+            for strategy in strategies {
+                let step = strategy(self);
+                if let Some(step) = step {
+                    self.apply_step(step);
+                    continue 'outer;
+                }
             }
             break;
         }
