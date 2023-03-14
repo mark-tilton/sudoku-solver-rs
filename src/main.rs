@@ -34,6 +34,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut boards = load_boards("sudoku_boards.txt")?;
     let board = &mut boards[0];
     board.display();
+    println!("Valid: {}", board.check_valid());
     board.solve();
     println!("");
     board.display();

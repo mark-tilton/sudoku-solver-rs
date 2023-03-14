@@ -45,8 +45,6 @@ impl Board {
         }
     }
 
-    // This may only be used to verify if the box is valid.
-    // If so, this should probably be refactored to just to that here.
     fn get_box(&self, row: usize, col: usize) -> Vec<&Cell> {
         // Get the top left cell of the box
         let top = (row as f32 / 3f32).floor() as usize * 3;
@@ -73,15 +71,49 @@ impl Board {
 
     pub fn check_valid(&mut self) -> bool {
         self.trim_hints();
+        // Check that there are no cells with no valid numbers
         for row in &self.cells {
-            for val in row {
-                match val {
+            for cell in row {
+                match cell {
                     Cell::Hint(hints) => {
                         if hints.is_empty() {
                             return false;
                         }
                     }
                     _ => {}
+                }
+            }
+        }
+
+        for i in 0..9 {
+            for cells in [
+                self.get_box(i, i % 3 * 3),
+                self.get_line(i, Direction::X),
+                self.get_line(i, Direction::Y),
+            ] {
+                // Check that there are no row / cols / boxes which cannot
+                // contain a certain number
+                let mut possible_vals = [false; 9];
+                // Check that each row / col / box contains no duplicate numbers
+                let mut found_vals = [false; 9];
+                for cell in cells {
+                    match cell {
+                        Cell::Val(num) => {
+                            possible_vals[*num as usize - 1] = true;
+                            if found_vals[*num as usize - 1] == true {
+                                return false;
+                            }
+                            found_vals[*num as usize - 1] = true
+                        }
+                        Cell::Hint(hints) => {
+                            for num in hints {
+                                possible_vals[*num as usize - 1] = true;
+                            }
+                        }
+                    }
+                }
+                if possible_vals.contains(&false) {
+                    return false;
                 }
             }
         }
