@@ -158,6 +158,74 @@ impl Board {
         }
     }
 
+    // Assumes that hints have been trimmed first.
+    fn trim_pointing_hints(&mut self) {
+        for i in 0..9 {
+            'nums: for num in 1..10 {
+                let box_cells = self.get_box(i, i % 3 * 3);
+                let mut positions = Vec::new();
+                for (cell, pos) in &box_cells {
+                    match cell {
+                        Cell::Hint(hints) => {
+                            if hints.contains(&num) {
+                                positions.push(*pos);
+                            }
+                        }
+                        // If we have already placed this number, move on.
+                        Cell::Val(val) => {
+                            if val == &num {
+                                continue 'nums;
+                            }
+                        }
+                    }
+                }
+                if positions.len() < 2 {
+                    continue;
+                }
+                let mut first_position: [Option<usize>; 2] =
+                    [Some(positions[0][0]), Some(positions[0][1])];
+                for pos in &positions {
+                    for i in 0..2 {
+                        if let Some(j) = first_position[i] {
+                            if pos[i] != j {
+                                first_position[i] = None;
+                            }
+                        }
+                    }
+                }
+                let mut pointing_positions = Vec::new();
+                if let Some(c) = first_position[0] {
+                    pointing_positions = self
+                        .get_line(c, Direction::X)
+                        .iter()
+                        .map(|(_, i)| *i)
+                        .collect();
+                }
+                if let Some(c) = first_position[1] {
+                    pointing_positions = self
+                        .get_line(c, Direction::Y)
+                        .iter()
+                        .map(|(_, i)| *i)
+                        .collect();
+                }
+                if pointing_positions.len() == 0 {
+                    continue;
+                }
+                for pos in pointing_positions {
+                    if positions.contains(&pos) {
+                        continue;
+                    }
+                    match &mut self.cells[pos[0]][pos[1]] {
+                        Cell::Hint(hints) => {
+                            hints.remove(&num);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     // Strategy
     fn find_naked_single(&self) -> Option<SolveStep> {
         for row in 0..9 {
@@ -226,6 +294,7 @@ impl Board {
         let strategies = [Board::find_naked_single, Board::find_lonely_single];
         'outer: loop {
             self.trim_hints();
+            self.trim_pointing_hints();
             for strategy in strategies {
                 let step = strategy(self);
                 if let Some(step) = step {
