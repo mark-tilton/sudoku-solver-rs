@@ -194,19 +194,11 @@ impl Board {
                     }
                 }
                 let mut pointing_positions = Vec::new();
-                if let Some(c) = first_position[0] {
-                    pointing_positions = self
-                        .get_line(c, Direction::X)
-                        .iter()
-                        .map(|(_, i)| *i)
-                        .collect();
-                }
-                if let Some(c) = first_position[1] {
-                    pointing_positions = self
-                        .get_line(c, Direction::Y)
-                        .iter()
-                        .map(|(_, i)| *i)
-                        .collect();
+                for (i, dir) in [(0, Direction::X), (1, Direction::Y)] {
+                    if let Some(c) = first_position[i] {
+                        pointing_positions =
+                            self.get_line(c, dir).iter().map(|(_, i)| *i).collect();
+                    }
                 }
                 if pointing_positions.len() == 0 {
                     continue;
