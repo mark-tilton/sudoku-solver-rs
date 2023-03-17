@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub enum Direction {
     X,
     Y,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum Cell {
     Val(u8),
     Hint(HashSet<u8>),
@@ -218,6 +219,65 @@ impl Board {
         }
     }
 
+    fn trim_pairs(&mut self) {
+        // let mut groups: Vec<(Vec<&Cell>, Vec<u8>)>;
+        let mut group_map = HashMap::new();
+        for i in 0..9 {
+            for cells in [
+                self.get_box(i, i % 3 * 3),
+                self.get_line(i, Direction::X),
+                self.get_line(i, Direction::Y),
+            ] {
+                let mut hint_map = HashMap::<u8, Vec<usize>>::new();
+                for (i, (cell, _)) in cells.iter().enumerate() {
+                    match cell {
+                        Cell::Hint(hints) => {
+                            for hint in hints {
+                                match hint_map.get_mut(hint) {
+                                    Some(positions) => {
+                                        positions.push(i);
+                                    }
+                                    None => {
+                                        hint_map.insert(*hint, vec![i]);
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                let mut position_map = HashMap::<&Vec<usize>, Vec<u8>>::new();
+                for (val, positions) in hint_map.iter() {
+                    match position_map.get_mut(positions) {
+                        Some(vals) => {
+                            vals.push(*val);
+                        }
+                        None => {
+                            position_map.insert(positions, vec![*val]);
+                        }
+                    }
+                }
+
+                for (positions, vals) in position_map.iter() {
+                    if positions.len() != vals.len() {
+                        continue;
+                    }
+                    for pos in *positions {
+                        group_map.insert(cells[*pos].1, vals.clone());
+                    }
+                }
+            }
+        }
+        for (pos, vals) in group_map {
+            let cell = &mut self.cells[pos[0]][pos[1]];
+            if let Cell::Hint(hints) = cell {
+                hints.drain();
+                hints.extend(vals)
+            }
+        }
+    }
+
     // Strategy
     fn find_naked_single(&self) -> Option<SolveStep> {
         for row in 0..9 {
@@ -287,6 +347,7 @@ impl Board {
         'outer: loop {
             self.trim_hints();
             self.trim_pointing_hints();
+            self.trim_pairs();
             for strategy in strategies {
                 let step = strategy(self);
                 if let Some(step) = step {
